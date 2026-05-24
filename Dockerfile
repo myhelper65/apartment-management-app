@@ -8,7 +8,9 @@ RUN mvn clean package -DskipTests
 # 2. Çalıştırma aşaması
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/apartment-app-0.0.1-SNAPSHOT.jar app.jar
+
+# DÜZELTİLEN SATIR: apartment-app yerine apartment-management yazıldı
+COPY --from=build /app/target/apartment-management-0.0.1-SNAPSHOT.jar app.jar
 
 # AWS Credentials için çevresel değişkenleri container'a geçmeniz gerekecek
 ENV AWS_ACCESS_KEY_ID=your_access_key
