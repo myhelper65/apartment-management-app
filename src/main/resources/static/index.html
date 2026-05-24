@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apartman Tamirat & Envanter Yönetimi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-50">
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Icons = {
+        Layout: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1" /><rect width="7" height="5" x="14" y="3" rx="1" /><rect width="7" height="9" x="14" y="12" rx="1" /><rect width="7" height="5" x="3" y="16" rx="1" /></svg>,
+        Search: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>,
+        Home: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>,
+        Plus: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /><path d="M12 8v8" /></svg>,
+        Image: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>,
+        File: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></svg>,
+        Trash: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>,
+        Mail: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>,
+        Lock: ({ size = 20 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+    };
+
+    const App = () => {
+        // Kullanıcılar listesi (Kalıcı hafıza)
+        const [users, setUsers] = useState(() => {
+            const savedUsers = localStorage.getItem('aptUsers');
+            return savedUsers ? JSON.parse(savedUsers) : [];
+        });
+
+        // Kimlik doğrulama durumu - SEKME KAPANINCA SİLİNEN SESSIONSTORAGE KULLANILDI (Refresh'te log out olmaz)
+        const [isAuthenticated, setIsAuthenticated] = useState(() => {
+            return sessionStorage.getItem('isAuthSession') === 'true';
+        });
+
+        const [authMode, setAuthMode] = useState('login');
+        const [authData, setAuthData] = useState({ email: '', password: '' });
+        const [recoveredPassword, setRecoveredPassword] = useState(null);
+
+        // Veri State'i
+        const [apartments, setApartments] = useState(() => {
+            const savedData = localStorage.getItem('apartmentRecords');
+            if (savedData) {
+                try { return JSON.parse(savedData); } catch (e) { return []; }
+            }
+            return [];
+        });
+
+        const [newAptName, setNewAptName] = useState('');
+        const [selectedId, setSelectedId] = useState(null);
+        const [searchTerm, setSearchTerm] = useState('');
+        const [form, setForm] = useState({ title: '', price: '', productImage: '', invoiceImage: '', notes: '', tarih: '' });
+
+        // Idle zamanlayıcı referansı
+        const idleTimeoutRef = useRef(null);
+        const IDLE_TIME_LIMIT = 5 * 60 * 1000; // 5 Dakika
+
+        // Temiz çıkış mantığı
+        const handleLogout = () => {
+            setIsAuthenticated(false);
+            sessionStorage.removeItem('isAuthSession');
+            setAuthData({ email: '', password: '' });
+            setRecoveredPassword(null);
+            setAuthMode('login');
+            if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
+        };
+
+        // Oturum durumunu sadece sekme bazlı hafızaya (sessionStorage) kaydet
+        useEffect(() => {
+            if (isAuthenticated) {
+                sessionStorage.setItem('isAuthSession', 'true');
+            } else {
+                sessionStorage.removeItem('isAuthSession');
+            }
+        }, [isAuthenticated]);
+
+        // Idle (Hareketsizlik) Takip Mekanizması
+        useEffect(() => {
+            if (!isAuthenticated) return;
+
+            const resetIdleTimer = () => {
+                if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
+
+                idleTimeoutRef.current = setTimeout(() => {
+                    alert('Hareketsizlik nedeniyle oturumunuz güvenli bir şekilde kapatılmıştır.');
+                    handleLogout();
+                }, IDLE_TIME_LIMIT);
+            };
+
+            // Kullanıcı hareketlerini dinle
+            const activityEvents = ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll'];
+            activityEvents.forEach(event => window.addEventListener(event, resetIdleTimer));
+
+            // İlk sayfa açıldığında/yenilendiğinde sayacı başlat
+            resetIdleTimer();
+
+            // Temizlik fonksiyonu
+            return () => {
+                if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
+                activityEvents.forEach(event => window.removeEventListener(event, resetIdleTimer));
+            };
+        }, [isAuthenticated]);
+
+        // Kullanıcı listesi değiştikçe kaydet
+        useEffect(() => {
+            localStorage.setItem('aptUsers', JSON.stringify(users));
+        }, [users]);
+
+        // Daire verileri değiştikçe kaydet
+        useEffect(() => {
+            const cleanedApartments = apartments.filter(apt => apt.items.length > 0 || apt.id === selectedId);
+            if (JSON.stringify(cleanedApartments) !== JSON.stringify(apartments)) {
+                setApartments(cleanedApartments);
+            }
+            localStorage.setItem('apartmentRecords', JSON.stringify(apartments));
+        }, [apartments, selectedId]);
+
+        // AUTH İŞLEMLERİ
+        const handleAuthSubmit = (e) => {
+            e.preventDefault();
+            const email = authData.email.trim().toLowerCase();
+            const password = authData.password;
+
+            if (!email) {
+                alert('Lütfen e-posta adresinizi giriniz.');
+                return;
+            }
+
+            if (authMode === 'register') {
+                if (!password) {
+                    alert('Lütfen bir şifre belirleyin.');
+                    return;
+                }
+                if (users.some(u => u.email === email)) {
+                    alert('Bu e-posta adresi zaten kayıtlı!');
+                    return;
+                }
+                setUsers(prev => [...prev, { email, password }]);
+                alert('Hesabınız başarıyla oluşturuldu! Şimdi giriş yapabilirsiniz.');
+                setAuthMode('login');
+                setAuthData({ email: '', password: '' });
+            }
+            else if (authMode === 'login') {
+                if (!password) {
+                    alert('Lütfen şifrenizi giriniz.');
+                    return;
+                }
+                const user = users.find(u => u.email === email && u.password === password);
+                if (user) {
+                    setIsAuthenticated(true);
+                } else {
+                    alert('Hatalı e-posta veya şifre girdiniz! Eğer ilk defa kullanıyorsanız lütfen alttan "Kayıt Ol" seçeneğine tıklayın.');
+                }
+            }
+            else if (authMode === 'forgot') {
+                const user = users.find(u => u.email === email);
+                if (user) {
+                    setRecoveredPassword(user.password);
+                } else {
+                    alert('Bu e-posta adresine ait bir kayıtlı kullanıcı bulunamadı!');
+                    setRecoveredPassword(null);
+                }
+            }
+        };
+
+        // APARTMAN İŞLEMLERİ
+        const selectedApartment = apartments.find(a => a.id === selectedId);
+
+        const grandTotal = apartments.reduce((acc, apt) => {
+            return acc + apt.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+        }, 0);
+        const totalItemsCount = apartments.reduce((acc, apt) => acc + apt.items.length, 0);
+
+        const handleAddApartment = (e) => {
+            e.preventDefault();
+            const name = newAptName.trim();
+            if (!name) return;
+
+            if (apartments.some(apt => apt.id.toLowerCase() === name.toLowerCase())) {
+                alert('Bu isimde/numarada bir kayıt zaten var!');
+                return;
+            }
+
+            setApartments(prev => [...prev, { id: name, items: [] }]);
+            setNewAptName('');
+            setSelectedId(name);
+        };
+
+        const handleFile = (e, key) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setForm(prev => ({ ...prev, [key]: event.target.result }));
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const saveItem = () => {
+            if (!form.title || !form.price) {
+                alert("Lütfen ürün/hizmet adı ve fiyat giriniz.");
+                return;
+            }
+
+            const newItem = {
+                ...form,
+                id: Date.now(),
+                date: form.tarih || new Date().toLocaleDateString('tr-TR')
+            };
+
+            setApartments(prev => prev.map(apt =>
+                apt.id === selectedId ? { ...apt, items: [newItem, ...apt.items] } : apt
+            ));
+
+            setForm({ title: '', price: '', productImage: '', invoiceImage: '', notes: '', tarih: '' });
+        };
+
+        const deleteItem = (id) => {
+            if(window.confirm('Bu kaydı silmek istediğinize emin misiniz?')) {
+                setApartments(prev => prev.map(apt =>
+                    apt.id === selectedId ? { ...apt, items: apt.items.filter(i => i.id !== id) } : apt
+                ));
+            }
+        };
+
+        const filteredList = apartments.filter(a => {
+            const matchesSearch = a.id.toLowerCase().includes(searchTerm.toLowerCase());
+            const hasItems = a.items.length > 0;
+            const isCurrentlySelected = a.id === selectedId;
+
+            return matchesSearch && (hasItems || isCurrentlySelected);
+        });
+
+        // GİRİŞ / KAYIT / ŞİFRE EKRANI UI
+        if (!isAuthenticated) {
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 md:p-10 animate-in">
+                        <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                            <Icons.Lock size={40} />
+                        </div>
+                        <h2 className="text-3xl font-black text-center text-slate-800 tracking-tighter mb-2">
+                            {authMode === 'login' && 'Yönetici Girişi'}
+                            {authMode === 'register' && 'Yeni Hesap Aç'}
+                            {authMode === 'forgot' && 'Şifremi Unuttum'}
+                        </h2>
+
+                        {recoveredPassword && (
+                            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-bold text-sm text-center animate-in">
+                                Şifreniz: <span className="text-base font-black tracking-wider text-slate-800">{recoveredPassword}</span>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleAuthSubmit} className="space-y-5 mt-6">
+                            <div>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icons.Mail size={20} /></div>
+                                    <input
+                                        type="email" required
+                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold text-sm"
+                                        placeholder="E-Posta Adresi"
+                                        value={authData.email}
+                                        onChange={e => setAuthData({...authData, email: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+
+                            {authMode !== 'forgot' && (
+                                <div>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><Icons.Lock size={20} /></div>
+                                        <input
+                                            type="password" required
+                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold text-sm"
+                                            placeholder="Şifre"
+                                            value={authData.password}
+                                            onChange={e => setAuthData({...authData, password: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase hover:bg-indigo-700 transition-all shadow-lg mt-2 text-sm tracking-wider">
+                                {authMode === 'login' && 'Giriş Yap'}
+                                {authMode === 'register' && 'Hesap Oluştur'}
+                                {authMode === 'forgot' && 'Şifremi Göster'}
+                            </button>
+                        </form>
+
+                        <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs font-bold text-slate-400">
+                            {authMode !== 'login' && (
+                                <button onClick={() => { setAuthMode('login'); setRecoveredPassword(null); }} className="hover:text-indigo-600 transition-colors">Giriş Yap</button>
+                            )}
+                            {authMode !== 'register' && (
+                                <button onClick={() => { setAuthMode('register'); setRecoveredPassword(null); }} className="hover:text-indigo-600 transition-colors">Kayıt Ol</button>
+                            )}
+                            {authMode !== 'forgot' && (
+                                <button onClick={() => { setAuthMode('forgot'); setRecoveredPassword(null); }} className="hover:text-indigo-600 transition-colors">Şifremi Unuttum</button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ANA DASHBOARD UI
+        return (
+            <div className="min-h-screen">
+                <header className="bg-indigo-950 text-white p-4 sticky top-0 z-50 shadow-2xl">
+                    <div className="max-w-7xl mx-auto flex justify-between items-center">
+                        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedId(null)}>
+                            <div className="bg-indigo-500 p-2 rounded-lg"><Icons.Layout size={24} /></div>
+                            <h1 className="text-xl font-black hidden sm:block">APARTMAN YÖNETİMİ</h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="relative w-48 sm:w-64">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40"><Icons.Search size={16} /></span>
+                                <input
+                                    className="w-full bg-white/10 border border-white/20 rounded-xl py-2 pl-10 pr-4 outline-none text-sm focus:bg-white/20"
+                                    placeholder="Daire Ara..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <button onClick={handleLogout} className="bg-rose-500 hover:bg-rose-600 p-2.5 rounded-xl transition-colors" title="Güvenli Çıkış">
+                                <Icons.Lock size={18} />
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <div className="max-w-7xl mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <aside className="lg:col-span-3 flex flex-col gap-6">
+                        <div className="bg-gradient-to-br from-indigo-900 to-indigo-700 text-white p-6 rounded-[2rem] shadow-xl">
+                            <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-2">Toplam Gider</p>
+                            <p className="text-3xl font-black tracking-tighter">₺{grandTotal.toLocaleString('tr-TR')}</p>
+                            <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
+                                <span className="text-xs font-bold text-indigo-200">Kayıt</span>
+                                <span className="text-sm font-black bg-white/10 px-3 py-1 rounded-xl">{totalItemsCount} Adet</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <form onSubmit={handleAddApartment} className="flex gap-2 mb-6">
+                                <input
+                                    type="text"
+                                    className="flex-1 p-3 bg-white border-2 border-slate-100 rounded-xl outline-none focus:border-indigo-500 font-bold text-sm"
+                                    placeholder="Yeni Daire Ekle (Örn: Daire 5)"
+                                    value={newAptName}
+                                    onChange={(e) => setNewAptName(e.target.value)}
+                                />
+                                <button type="submit" className="bg-indigo-600 text-white px-4 rounded-xl hover:bg-indigo-700 shadow-lg"><Icons.Plus size={20} /></button>
+                            </form>
+
+                            <div className="flex flex-col gap-2 max-h-[440px] overflow-y-auto pr-2 custom-scrollbar">
+                                {filteredList.map(apt => {
+                                    const aptTotal = apt.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+                                    return (
+                                        <button
+                                            key={apt.id}
+                                            onClick={() => setSelectedId(apt.id)}
+                                            className={`w-full p-3.5 rounded-xl border-2 transition-all text-sm flex justify-between items-center ${selectedId === apt.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-white border-transparent text-slate-600 hover:border-slate-200'}`}
+                                        >
+                                            <div className="text-left">
+                                                <span className="block font-black tracking-tight">{apt.id}</span>
+                                                <span className="text-[10px] font-bold block mt-0.5 opacity-70">{apt.items.length} Kalem</span>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <span className={`text-xs font-black px-2 py-1.5 rounded-lg ${selectedId === apt.id ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-600 font-extrabold'}`}>
+                                                    ₺{aptTotal.toLocaleString('tr-TR')}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </aside>
+
+                    <main className="lg:col-span-9">
+                        {selectedApartment ? (
+                            <div className="animate-in space-y-6">
+                                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4 border border-slate-200">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0"><Icons.Home size={32} /></div>
+                                        <div>
+                                            <h2 className="text-3xl font-black text-slate-800 tracking-tighter">{selectedApartment.id}</h2>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-50 p-4 rounded-2xl">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Daire Maliyeti</p>
+                                        <p className="text-3xl font-black text-emerald-600 tracking-tighter">₺{selectedApartment.items.reduce((sum, item) => sum + (Number(item.price) || 0), 0).toLocaleString('tr-TR')}</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-indigo-100">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="space-y-4">
+                                            <input
+                                                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold"
+                                                placeholder="İşlem Adı"
+                                                value={form.title}
+                                                onChange={e => setForm({...form, title: e.target.value})}
+                                            />
+                                            <input
+                                                type="number"
+                                                className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-emerald-500 font-black text-emerald-600 text-lg"
+                                                placeholder="Tutar (₺)"
+                                                value={form.price}
+                                                onChange={e => setForm({...form, price: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <input id="product-upload" type="file" accept="image/*" className="hidden" onChange={e => handleFile(e, 'productImage')} onClick={e => e.target.value = null} />
+                                                <label htmlFor="product-upload" className="w-full h-full min-h-[120px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 relative overflow-hidden">
+                                                    {form.productImage ? <img src={form.productImage} className="absolute inset-0 w-full h-full object-cover" /> : <div className="text-center"><Icons.Image size={24} className="mx-auto text-slate-300"/><span className="text-[9px] font-bold text-slate-400 mt-1 block">ÜRÜN</span></div>}
+                                                </label>
+                                            </div>
+                                            <div className="flex-1">
+                                                <input id="invoice-upload" type="file" accept="image/*" className="hidden" onChange={e => handleFile(e, 'invoiceImage')} onClick={e => e.target.value = null} />
+                                                <label htmlFor="invoice-upload" className="w-full h-full min-h-[120px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 relative overflow-hidden">
+                                                    {form.invoiceImage ? <img src={form.invoiceImage} className="absolute inset-0 w-full h-full object-cover" /> : <div className="text-center"><Icons.File size={24} className="mx-auto text-slate-300"/><span className="text-[9px] font-bold text-slate-400 mt-1 block">FATURA</span></div>}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-4">
+                                            <textarea
+                                                className="flex-1 p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 resize-none text-sm"
+                                                placeholder="Notlar..."
+                                                value={form.notes}
+                                                onChange={e => setForm({...form, notes: e.target.value})}
+                                            />
+                                            <button onClick={saveItem} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg">
+                                                Kaydet
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-6">
+                                    {selectedApartment.items.map(item => (
+                                        <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row gap-6 items-center">
+                                            <div className="flex gap-4">
+                                                {item.productImage ? <img src={item.productImage} className="w-20 h-20 rounded-xl object-cover" /> : <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Icons.Image/></div>}
+                                                {item.invoiceImage ? <img src={item.invoiceImage} className="w-20 h-20 rounded-xl object-cover" /> : <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300"><Icons.File/></div>}
+                                            </div>
+                                            <div className="flex-1 w-full text-center sm:text-left">
+                                                <h4 className="font-black text-lg text-slate-800">{item.title}</h4>
+                                                <p className="text-xs font-bold text-slate-400 mb-2">{item.date}</p>
+                                                {item.notes && <div className="text-sm font-medium text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">{item.notes}</div>}
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <p className="text-2xl font-black text-emerald-600 tracking-tight">₺{Number(item.price).toLocaleString('tr-TR')}</p>
+                                                <button onClick={() => deleteItem(item.id)} className="text-slate-400 hover:text-rose-500 bg-slate-50 p-3 rounded-xl"><Icons.Trash size={20} /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-8 text-center animate-in">
+                                <div className="w-24 h-24 bg-slate-50 text-slate-300 rounded-3xl flex items-center justify-center mb-6"><Icons.Layout size={48} /></div>
+                                <h2 className="text-2xl font-black text-slate-800 mb-2">Daire Seçilmedi</h2>
+                                <p className="text-slate-400 font-bold max-w-md">Detayları görmek için listeden bir daire seçin.</p>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            </div>
+        );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>

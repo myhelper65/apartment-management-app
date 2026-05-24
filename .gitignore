@@ -1,0 +1,67 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# Terraform lokal eklenti dizinleri ve kilit dosyaları
+**/.terraform/*
+.terraform.lock.hcl
+
+# State dosyaları (Kesinlikle repoya atılmamalıdır, gerçek altyapı durumunu ve bazen şifreleri tutar)
+*.tfstate
+*.tfstate.*
+
+# Plan çıktıları
+*.tfplan
+
+# Gizli değişkenlerin tutulduğu dosyalar (AWS Access Key vb. buraya konur ve git'ten gizlenir)
+*.tfvars
+*.tfvars.json
+
+# Lokal ezme (override) dosyaları
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Log ve Crash dosyaları
+crash.log
+crash.*.log
+*.log
+
+# Şifreler, Anahtarlar ve Çevresel Değişkenler
+*.pem
+*.rsa
+*.pub
+*.key
+.env
+credentials.json
